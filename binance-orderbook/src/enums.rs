@@ -10,7 +10,7 @@ pub enum BinanceMessage {
 pub enum MenuCommand {
     BestBidAsk,
     VolumeAtPrice(f64),
-    UpdateBid(f64, f64),
+    JsonProcessing(String),
     WebSocketProcessing,
     Exit,
 }

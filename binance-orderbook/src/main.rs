@@ -17,6 +17,7 @@ use tokio_tungstenite::{
 };
 
 mod enums;
+mod helper;
 mod menu;
 mod process;
 mod structs;
@@ -24,7 +25,7 @@ mod structs;
 #[cfg(test)]
 mod tests;
 
-use {enums::*, menu::*, process::*, structs::*};
+use {enums::*, helper::*, menu::*, process::*, structs::*};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

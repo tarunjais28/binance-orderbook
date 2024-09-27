@@ -5,7 +5,7 @@ async fn display_menu() {
     println!("{}", "\n------- Orderbook Menu -------".green().bold());
     println!("{}", "1. View Best Bid/Ask".green());
     println!("{}", "2. Get Volume at Price".green());
-    println!("{}", "3. Update Bid".green());
+    println!("{}", "3. Start Json Processing".green());
     println!("{}", "4. Start WebSocket Processing".green());
     println!("{}", "5. Exit".green());
     println!("{}", "------------------------------".green().bold());
@@ -31,23 +31,11 @@ async fn get_user_input() -> Result<MenuCommand, Box<dyn Error>> {
             }
         }
         "3" => {
-            println!("Enter price to update bid:");
-            let mut price_input = String::new();
-            stdin.read_line(&mut price_input).await?;
-            if let Ok(price) = price_input.trim().parse::<f64>() {
-                println!("Enter volume to set for this bid:");
-                let mut volume_input = String::new();
-                stdin.read_line(&mut volume_input).await?;
-                if let Ok(volume) = volume_input.trim().parse::<f64>() {
-                    Ok(MenuCommand::UpdateBid(price, volume))
-                } else {
-                    println!("Invalid input for volume.");
-                    Ok(MenuCommand::BestBidAsk) // fallback to default
-                }
-            } else {
-                println!("Invalid input for price.");
-                Ok(MenuCommand::BestBidAsk) // fallback to default
-            }
+            println!("Enter json data in compact form:");
+            let mut json_input = String::new();
+            stdin.read_line(&mut json_input).await?;
+
+            Ok(MenuCommand::JsonProcessing(json_input))
         }
         "4" => Ok(MenuCommand::WebSocketProcessing),
         "5" => Ok(MenuCommand::Exit),
@@ -76,10 +64,28 @@ pub async fn menu_interface(
                 let volume = orderbook.get_volume_at_price(price);
                 println!("Volume at price {}: {}", price, volume);
             }
-            MenuCommand::UpdateBid(price, volume) => {
+            MenuCommand::JsonProcessing(json_input) => {
                 let mut orderbook = orderbook.lock().await;
-                // orderbook.update_bid(price, volume);
-                println!("Updated bid at price {} with volume {}.", price, volume);
+                if let Ok(update) = serde_json::from_str::<BookTickerUpdateReader>(&json_input) {
+                    // Ensure same symbol
+                    orderbook.is_symbol_same(&update.symbol)?;
+
+                    // Ensure the update is sequential based on `lastUpdateId`
+                    orderbook.is_update_sequential(update.last_update_id)?;
+
+                    // Updating orderbook
+                    let book_ticker_update = BookTickerUpdate::from_reader(update)?;
+                    orderbook.update_book_ticker(&book_ticker_update);
+                } else if let Ok(update) = serde_json::from_str::<DepthUpdateReader>(&json_input) {
+                    // Ensure the update is sequential based on `lastUpdateId`
+                    orderbook.is_update_sequential(update.last_update_id)?;
+
+                    // Updating orderbook
+                    let depth_update = DepthUpdate::from_reader(update);
+                    orderbook.update_depth(&depth_update);
+                } else {
+                    eprintln!("Invalid json data!")
+                };
             }
             MenuCommand::WebSocketProcessing => {
                 let orderbook_clone = Arc::clone(&orderbook);

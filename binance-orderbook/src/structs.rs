@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug, Clone)]
 pub struct OrderBook {
     symbol: String,
-    last_order_id: u64,
+    last_update_id: u64,
     pub bids: BTreeMap<OrderedFloat<f64>, f64>, // Wrap f64 in OrderedFloat
     pub asks: BTreeMap<OrderedFloat<f64>, f64>, // Wrap f64 in OrderedFloat
 }
@@ -12,13 +12,16 @@ impl OrderBook {
     pub fn new(symbol: String) -> Self {
         Self {
             symbol,
-            last_order_id: 0,
+            last_update_id: 0,
             bids: BTreeMap::new(),
             asks: BTreeMap::new(),
         }
     }
 
     pub fn update_book_ticker(&mut self, data: &BookTickerUpdate) {
+        // Update last_update_id
+        self.last_update_id = data.last_update_id;
+
         // Update best bid
         if data.bid_qty > 0.0 {
             self.bids.insert(OrderedFloat(data.bid_price), data.bid_qty);
@@ -35,6 +38,9 @@ impl OrderBook {
     }
 
     pub fn update_depth(&mut self, data: &DepthUpdate) {
+        // Update last_update_id
+        self.last_update_id = data.last_update_id;
+
         // Update bids
         for (price, qty) in &data.bids {
             if *qty > 0.0 {
@@ -87,7 +93,7 @@ impl OrderBook {
     }
 
     pub fn is_update_sequential(&self, last_update_id: u64) -> Result<(), Box<dyn Error>> {
-        if self.last_order_id >= last_update_id {
+        if self.last_update_id >= last_update_id {
             eprintln!("Skipping outdated update: {}", last_update_id);
         }
 
@@ -97,6 +103,7 @@ impl OrderBook {
 
 #[derive(Debug)]
 pub struct BookTickerUpdate {
+    last_update_id: u64,
     bid_price: f64,
     bid_qty: f64,
     ask_price: f64,
@@ -104,8 +111,15 @@ pub struct BookTickerUpdate {
 }
 
 impl BookTickerUpdate {
-    pub fn new(bid_price: f64, bid_qty: f64, ask_price: f64, ask_qty: f64) -> Self {
+    pub fn new(
+        last_update_id: u64,
+        bid_price: f64,
+        bid_qty: f64,
+        ask_price: f64,
+        ask_qty: f64,
+    ) -> Self {
         Self {
+            last_update_id,
             bid_price,
             bid_qty,
             ask_price,
@@ -115,6 +129,7 @@ impl BookTickerUpdate {
 
     pub fn from_reader(reader: BookTickerUpdateReader) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
+            last_update_id: reader.last_update_id,
             bid_price: reader.bid_price.parse()?,
             bid_qty: reader.bid_qty.parse()?,
             ask_price: reader.ask_price.parse()?,
@@ -125,17 +140,23 @@ impl BookTickerUpdate {
 
 #[derive(Debug)]
 pub struct DepthUpdate {
+    last_update_id: u64,
     bids: Vec<(f64, f64)>,
     asks: Vec<(f64, f64)>,
 }
 
 impl DepthUpdate {
-    pub fn new(bids: Vec<(f64, f64)>, asks: Vec<(f64, f64)>) -> Self {
-        Self { bids, asks }
+    pub fn new(last_update_id: u64, bids: Vec<(f64, f64)>, asks: Vec<(f64, f64)>) -> Self {
+        Self {
+            last_update_id,
+            bids,
+            asks,
+        }
     }
 
     pub fn from_reader(reader: DepthUpdateReader) -> Self {
         Self {
+            last_update_id: reader.last_update_id,
             bids: reader
                 .bids
                 .into_iter()
@@ -187,17 +208,4 @@ pub struct DepthUpdateReader {
     pub last_update_id: u64, // Last update ID
     pub bids: Vec<[String; 2]>, // Price level to be updated
     pub asks: Vec<[String; 2]>, // Price level to be updated
-}
-
-pub fn display_best_bid_ask<F, T>(orderbook: &T, extract_fn: F)
-where
-    F: Fn(&T) -> Option<((f64, f64), (f64, f64))>,
-{
-    let msg = if let Some((best_bid, best_ask)) = extract_fn(orderbook) {
-        format!("Best Bid: {:?}, Best Ask: {:?}\n\n", best_bid, best_ask)
-    } else {
-        "Orderbook is empty.".to_string()
-    };
-
-    println!("{}", msg.purple())
 }
