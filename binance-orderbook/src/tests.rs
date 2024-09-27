@@ -5,12 +5,7 @@ use super::*;
 #[test]
 fn test_update_book_ticker() {
     let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-    let book_ticker_update = BookTickerUpdate {
-        best_bid_price: 25.3519,
-        best_bid_qty: 31.21,
-        best_ask_price: 25.3652,
-        best_ask_qty: 40.66,
-    };
+    let book_ticker_update = BookTickerUpdate::new(25.3519, 31.21, 25.3652, 40.66);
 
     orderbook.update_book_ticker(&book_ticker_update);
     let best_bid_ask = orderbook.get_best_bid_ask().unwrap();
@@ -21,11 +16,11 @@ fn test_update_book_ticker() {
 #[test]
 fn test_update_depth() {
     let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-    let depth_update = DepthUpdate {
-        last_update_id: 160,
-        bids: vec![(0.0024, 10.0), (0.0025, 5.0)],
-        asks: vec![(0.0026, 100.0)],
-    };
+    let depth_update = DepthUpdate::new(
+        160,
+        vec![(0.0024, 10.0), (0.0025, 5.0)],
+        vec![(0.0026, 100.0)],
+    );
 
     orderbook.update_depth(&depth_update);
     assert_eq!(orderbook.get_volume_at_price(0.0024), 10.0);
