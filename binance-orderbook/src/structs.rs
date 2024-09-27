@@ -104,23 +104,17 @@ impl BookTickerUpdate {
 
 #[derive(Debug)]
 pub struct DepthUpdate {
-    last_update_id: u64,
     bids: Vec<(f64, f64)>,
     asks: Vec<(f64, f64)>,
 }
 
 impl DepthUpdate {
-    pub fn new(last_update_id: u64, bids: Vec<(f64, f64)>, asks: Vec<(f64, f64)>) -> Self {
-        Self {
-            last_update_id,
-            bids,
-            asks,
-        }
+    pub fn new(bids: Vec<(f64, f64)>, asks: Vec<(f64, f64)>) -> Self {
+        Self { bids, asks }
     }
 
     pub fn from_reader(reader: DepthUpdateReader) -> Self {
         Self {
-            last_update_id: reader.last_update_id,
             bids: reader
                 .bids
                 .into_iter()
@@ -148,7 +142,7 @@ impl DepthUpdate {
 #[derive(Debug, Deserialize)]
 pub struct BookTickerUpdateReader {
     #[serde(rename = "u")]
-    pub update_id: u64, // order book updateId
+    pub last_update_id: u64, // order book updateId
 
     #[serde(rename = "s")]
     pub symbol: String, // symbol

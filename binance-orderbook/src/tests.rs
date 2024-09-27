@@ -16,11 +16,7 @@ fn test_update_book_ticker() {
 #[test]
 fn test_update_depth() {
     let mut orderbook = OrderBook::new("BNBUSDT".to_string());
-    let depth_update = DepthUpdate::new(
-        160,
-        vec![(0.0024, 10.0), (0.0025, 5.0)],
-        vec![(0.0026, 100.0)],
-    );
+    let depth_update = DepthUpdate::new(vec![(0.0024, 10.0), (0.0025, 5.0)], vec![(0.0026, 100.0)]);
 
     orderbook.update_depth(&depth_update);
     assert_eq!(orderbook.get_volume_at_price(0.0024), 10.0);
