@@ -2,7 +2,8 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub struct OrderBook {
-    pub symbol: String,
+    symbol: String,
+    last_order_id: u64,
     pub bids: BTreeMap<OrderedFloat<f64>, f64>, // Wrap f64 in OrderedFloat
     pub asks: BTreeMap<OrderedFloat<f64>, f64>, // Wrap f64 in OrderedFloat
 }
@@ -11,6 +12,7 @@ impl OrderBook {
     pub fn new(symbol: String) -> Self {
         Self {
             symbol,
+            last_order_id: 0,
             bids: BTreeMap::new(),
             asks: BTreeMap::new(),
         }
@@ -53,7 +55,7 @@ impl OrderBook {
     }
 
     pub fn get_best_bid_ask(&self) -> Option<((f64, f64), (f64, f64))> {
-        let best_bid = self.bids.iter().rev().next(); // highest bid
+        let best_bid = self.bids.iter().next_back(); // highest bid
         let best_ask = self.asks.iter().next(); // lowest ask
 
         if let (Some(bid), Some(ask)) = (best_bid, best_ask) {
@@ -71,6 +73,25 @@ impl OrderBook {
         } else {
             0.0
         }
+    }
+
+    pub fn is_symbol_same(&self, symbol: &str) -> Result<(), Box<dyn Error>> {
+        if !self.symbol.eq(&symbol) {
+            eprintln!(
+                "Symbol is different! expected: {}, found: {}",
+                self.symbol, symbol
+            );
+        }
+
+        Ok(())
+    }
+
+    pub fn is_update_sequential(&self, last_update_id: u64) -> Result<(), Box<dyn Error>> {
+        if self.last_order_id >= last_update_id {
+            eprintln!("Skipping outdated update: {}", last_update_id);
+        }
+
+        Ok(())
     }
 }
 
@@ -168,8 +189,15 @@ pub struct DepthUpdateReader {
     pub asks: Vec<[String; 2]>, // Price level to be updated
 }
 
-#[derive(Debug)]
-pub enum BinanceMessage {
-    BookTicker(BookTickerUpdateReader),
-    DepthUpdate(DepthUpdateReader),
+pub fn display_best_bid_ask<F, T>(orderbook: &T, extract_fn: F)
+where
+    F: Fn(&T) -> Option<((f64, f64), (f64, f64))>,
+{
+    let msg = if let Some((best_bid, best_ask)) = extract_fn(orderbook) {
+        format!("Best Bid: {:?}, Best Ask: {:?}\n\n", best_bid, best_ask)
+    } else {
+        "Orderbook is empty.".to_string()
+    };
+
+    println!("{}", msg.purple())
 }

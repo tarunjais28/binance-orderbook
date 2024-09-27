@@ -5,20 +5,26 @@ use futures::{
 };
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
-use std::{collections::BTreeMap, error::Error};
-use tokio::time::{sleep, Duration};
+use std::{collections::BTreeMap, error::Error, sync::Arc};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    sync::Mutex,
+    time::{sleep, Duration},
+};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{client::IntoClientRequest, Message},
 };
 
+mod enums;
+mod menu;
 mod process;
 mod structs;
 
 #[cfg(test)]
 mod tests;
 
-use {process::*, structs::*};
+use {enums::*, menu::*, process::*, structs::*};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -30,15 +36,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let symbol = "BNBUSDT";
 
+    // Shared OrderBook state
+    let orderbook = Arc::new(Mutex::new(OrderBook::new(symbol.to_string())));
+
     // Spawn the WebSocket client
     tokio::spawn(async move {
-        if let Err(e) = binance_websocket_client(&symbol, tx).await {
+        if let Err(e) = binance_websocket_client(symbol, tx).await {
             eprintln!("Error in WebSocket client: {}", e);
         }
     });
 
-    // Process the incoming WebSocket messages
-    process_binance_messages(&symbol, rx).await?;
+    // Shared UnboundedReceiver wrapped in Arc<Mutex>
+    let rx = Arc::new(Mutex::new(rx));
+
+    // Launch menu interface for user interaction
+    menu_interface(orderbook, rx).await?;
 
     Ok(())
 }

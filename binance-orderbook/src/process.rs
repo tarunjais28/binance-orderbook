@@ -50,65 +50,41 @@ pub async fn binance_websocket_client(
 }
 
 pub async fn process_binance_messages(
-    symbol: &str,
-    mut rx: UnboundedReceiver<BinanceMessage>,
+    orderbook: &Arc<Mutex<OrderBook>>,
+    rx: &Arc<Mutex<UnboundedReceiver<BinanceMessage>>>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut orderbook = OrderBook::new(symbol.to_string());
-    let mut last_update_id = 0;
+    let mut orderbook = orderbook.lock().await;
+    let mut rx_locked = rx.lock().await;
 
-    while let Some(message) = rx.next().await {
+    if let Some(message) = rx_locked.next().await {
         match message {
             BinanceMessage::BookTicker(update) => {
                 println!("{}", format!("Book Ticker Update: {:#?}", update).blue());
 
                 // Ensure same symbol
-                if !orderbook.symbol.eq(&update.symbol) {
-                    eprintln!(
-                        "Symbol is different! expected: {}, found: {}",
-                        orderbook.symbol, update.symbol
-                    );
-                }
+                orderbook.is_symbol_same(&update.symbol)?;
 
                 // Ensure the update is sequential based on `lastUpdateId`
-                if update.last_update_id < last_update_id {
-                    println!("Skipping outdated update: {}", update.last_update_id);
-                    continue;
-                } else {
-                    // Update the lastUpdateId to match the latest one processed
-                    last_update_id = update.last_update_id;
+                orderbook.is_update_sequential(update.last_update_id)?;
 
-                    // Update is valid
-                    let book_ticker_update = BookTickerUpdate::from_reader(update)?;
-                    orderbook.update_book_ticker(&book_ticker_update);
-                }
+                // Updating orderbook
+                let book_ticker_update = BookTickerUpdate::from_reader(update)?;
+                orderbook.update_book_ticker(&book_ticker_update);
             }
             BinanceMessage::DepthUpdate(update) => {
                 println!("{}", format!("Depth Update: {:#?}", update).yellow());
 
                 // Ensure the update is sequential based on `lastUpdateId`
-                if update.last_update_id < last_update_id {
-                    println!("Skipping outdated update: {}", update.last_update_id);
-                    continue;
-                } else {
-                    // Update the lastUpdateId to match the latest one processed
-                    last_update_id = update.last_update_id;
+                orderbook.is_update_sequential(update.last_update_id)?;
 
-                    // Update is valid and sequential
-                    let depth_update = DepthUpdate::from_reader(update);
-                    orderbook.update_depth(&depth_update);
-                }
+                // Updating orderbook
+                let depth_update = DepthUpdate::from_reader(update);
+                orderbook.update_depth(&depth_update);
             }
         }
 
         // Print the current best bid/ask
-        if let Some((best_bid, best_ask)) = orderbook.get_best_bid_ask() {
-            println!(
-                "{}",
-                format!("Best Bid: {:?}, Best Ask: {:?}\n\n", best_bid, best_ask).purple()
-            );
-        }
-
-        sleep(Duration::from_secs(5)).await;
+        display_best_bid_ask(&orderbook, |orderbook| orderbook.get_best_bid_ask());
     }
 
     Ok(())
