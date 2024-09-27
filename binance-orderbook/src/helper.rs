@@ -12,3 +12,15 @@ where
 
     println!("{}", msg.purple())
 }
+
+pub fn parse_f64(value: &str, name: &str) -> Result<f64, OrderBookError> {
+    match value.parse::<f64>() {
+        Ok(val) => Ok(val),
+        Err(e) => {
+            return Err(OrderBookError::ParseError(format!(
+                "Error parsing {}: {}",
+                name, e
+            )))
+        }
+    }
+}

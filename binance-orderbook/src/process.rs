@@ -3,7 +3,7 @@ use super::*;
 pub async fn binance_websocket_client(
     symbol: &str,
     tx: UnboundedSender<BinanceMessage>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), OrderBookError> {
     // WebSocket URL for the book ticker and depth stream
     let ws_url = format!(
         "wss://stream.binance.com:9443/ws/{}@bookTicker/{}@depth20@100ms",
@@ -52,7 +52,7 @@ pub async fn binance_websocket_client(
 pub async fn process_binance_messages(
     orderbook: &Arc<Mutex<OrderBook>>,
     rx: &Arc<Mutex<UnboundedReceiver<BinanceMessage>>>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), OrderBookError> {
     let mut orderbook = orderbook.lock().await;
     let mut rx_locked = rx.lock().await;
 

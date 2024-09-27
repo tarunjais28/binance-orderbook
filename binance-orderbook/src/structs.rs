@@ -81,20 +81,23 @@ impl OrderBook {
         }
     }
 
-    pub fn is_symbol_same(&self, symbol: &str) -> Result<(), Box<dyn Error>> {
+    pub fn is_symbol_same(&self, symbol: &str) -> Result<(), OrderBookError> {
         if !self.symbol.eq(&symbol) {
-            eprintln!(
+            return Err(OrderBookError::DifferentSymbol(format!(
                 "Symbol is different! expected: {}, found: {}",
                 self.symbol, symbol
-            );
+            )));
         }
 
         Ok(())
     }
 
-    pub fn is_update_sequential(&self, last_update_id: u64) -> Result<(), Box<dyn Error>> {
+    pub fn is_update_sequential(&self, last_update_id: u64) -> Result<(), OrderBookError> {
         if self.last_update_id >= last_update_id {
-            eprintln!("Skipping outdated update: {}", last_update_id);
+            return Err(OrderBookError::UpdateIdOutdated(format!(
+                "Skipping outdated update: {}",
+                last_update_id
+            )));
         }
 
         Ok(())
@@ -127,13 +130,18 @@ impl BookTickerUpdate {
         }
     }
 
-    pub fn from_reader(reader: BookTickerUpdateReader) -> Result<Self, Box<dyn Error>> {
+    pub fn from_reader(reader: BookTickerUpdateReader) -> Result<Self, OrderBookError> {
+        let bid_price = parse_f64(&reader.bid_price, "bid_price")?;
+        let bid_qty = parse_f64(&reader.bid_qty, "bid_qty")?;
+        let ask_price = parse_f64(&reader.ask_price, "ask_price")?;
+        let ask_qty = parse_f64(&reader.ask_qty, "ask_qty")?;
+
         Ok(Self {
             last_update_id: reader.last_update_id,
-            bid_price: reader.bid_price.parse()?,
-            bid_qty: reader.bid_qty.parse()?,
-            ask_price: reader.ask_price.parse()?,
-            ask_qty: reader.ask_qty.parse()?,
+            bid_price,
+            bid_qty,
+            ask_price,
+            ask_qty,
         })
     }
 }

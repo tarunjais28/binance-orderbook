@@ -12,7 +12,7 @@ async fn display_menu() {
 }
 
 // Function to process user input for menu selection
-async fn get_user_input() -> Result<MenuCommand, Box<dyn Error>> {
+async fn get_user_input() -> Result<MenuCommand, OrderBookError> {
     let mut input = String::new();
     let mut stdin = BufReader::new(tokio::io::stdin());
 
@@ -50,7 +50,7 @@ async fn get_user_input() -> Result<MenuCommand, Box<dyn Error>> {
 pub async fn menu_interface(
     orderbook: Arc<Mutex<OrderBook>>,
     rx: Arc<Mutex<UnboundedReceiver<BinanceMessage>>>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), OrderBookError> {
     // Main loop for user menu interaction
     loop {
         display_menu().await;
@@ -68,17 +68,33 @@ pub async fn menu_interface(
                 let mut orderbook = orderbook.lock().await;
                 if let Ok(update) = serde_json::from_str::<BookTickerUpdateReader>(&json_input) {
                     // Ensure same symbol
-                    orderbook.is_symbol_same(&update.symbol)?;
+                    if let Err(err) = orderbook.is_symbol_same(&update.symbol) {
+                        eprintln!("{}", err);
+                        continue;
+                    }
 
                     // Ensure the update is sequential based on `lastUpdateId`
-                    orderbook.is_update_sequential(update.last_update_id)?;
+                    if let Err(err) = orderbook.is_update_sequential(update.last_update_id) {
+                        eprintln!("{}", err);
+                        continue;
+                    };
 
                     // Updating orderbook
-                    let book_ticker_update = BookTickerUpdate::from_reader(update)?;
+                    let book_ticker_update = match BookTickerUpdate::from_reader(update) {
+                        Ok(u) => u,
+                        Err(err) => {
+                            eprintln!("{}", err);
+                            continue;
+                        }
+                    };
+
                     orderbook.update_book_ticker(&book_ticker_update);
                 } else if let Ok(update) = serde_json::from_str::<DepthUpdateReader>(&json_input) {
                     // Ensure the update is sequential based on `lastUpdateId`
-                    orderbook.is_update_sequential(update.last_update_id)?;
+                    if let Err(err) = orderbook.is_update_sequential(update.last_update_id) {
+                        eprintln!("{}", err);
+                        continue;
+                    };
 
                     // Updating orderbook
                     let depth_update = DepthUpdate::from_reader(update);

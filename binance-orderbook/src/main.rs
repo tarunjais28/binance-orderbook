@@ -1,11 +1,12 @@
 use colored::*;
 use futures::{
-    channel::mpsc::{UnboundedReceiver, UnboundedSender},
+    channel::mpsc::{unbounded, TrySendError, UnboundedReceiver, UnboundedSender},
     StreamExt,
 };
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
-use std::{collections::BTreeMap, error::Error, sync::Arc};
+use serde_json::Error as SerdeError;
+use std::{collections::BTreeMap, fmt, sync::Arc};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     sync::Mutex,
@@ -13,10 +14,11 @@ use tokio::{
 };
 use tokio_tungstenite::{
     connect_async,
-    tungstenite::{client::IntoClientRequest, Message},
+    tungstenite::{self, client::IntoClientRequest, Message},
 };
 
 mod enums;
+mod error;
 mod helper;
 mod menu;
 mod process;
@@ -25,21 +27,23 @@ mod structs;
 #[cfg(test)]
 mod tests;
 
-use {enums::*, helper::*, menu::*, process::*, structs::*};
+use {enums::*, error::*, helper::*, menu::*, process::*, structs::*};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), OrderBookError> {
     // Initialize logging
     env_logger::init();
 
     // Create a channel for passing messages from the WebSocket client to the processor
-    let (tx, rx) = futures::channel::mpsc::unbounded();
+    let (tx, rx) = unbounded();
 
     let stdin = std::io::stdin();
     let mut input = String::new();
 
-    println!("Enter coin pair symbol (bnbusdt / ethusdt / btcusdt / bnbbtc):");
-    stdin.read_line(&mut input).expect("Failed to read symbol!");
+    println!("Enter coin pair symbol (bnbusdt / ethusdt / btcusdt / bnbbtc..etc):");
+    stdin
+        .read_line(&mut input)
+        .map_err(|e| OrderBookError::IoError(e))?;
     let symbol = input.trim().to_uppercase();
 
     // Shared OrderBook state
