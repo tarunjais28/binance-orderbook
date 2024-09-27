@@ -35,14 +35,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Create a channel for passing messages from the WebSocket client to the processor
     let (tx, rx) = futures::channel::mpsc::unbounded();
 
-    let symbol = "BNBUSDT";
+    let stdin = std::io::stdin();
+    let mut input = String::new();
+
+    println!("Enter coin pair symbol (bnbusdt / ethusdt / btcusdt / bnbbtc):");
+    stdin.read_line(&mut input).expect("Failed to read symbol!");
+    let symbol = input.trim().to_uppercase();
 
     // Shared OrderBook state
     let orderbook = Arc::new(Mutex::new(OrderBook::new(symbol.to_string())));
 
     // Spawn the WebSocket client
     tokio::spawn(async move {
-        if let Err(e) = binance_websocket_client(symbol, tx).await {
+        if let Err(e) = binance_websocket_client(&symbol, tx).await {
             eprintln!("Error in WebSocket client: {}", e);
         }
     });
