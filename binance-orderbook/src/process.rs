@@ -40,73 +40,41 @@ pub async fn binance_websocket_client(
     symbol: &str,
     tx: UnboundedSender<BinanceMessage>,
 ) -> Result<(), Box<dyn Error>> {
-    // Separate WebSocket URLs for book ticker and depth streams
-    let book_ticker_url = format!(
-        "wss://stream.binance.com:9443/ws/{}@bookTicker",
-        symbol.to_lowercase()
-    ).into_client_request()?;
-    let depth_url = format!(
-        "wss://stream.binance.com:9443/ws/{}@depth20@100ms",
+    // WebSocket URL for the book ticker and depth stream
+    let ws_url = format!(
+        "wss://stream.binance.com:9443/ws/{}@bookTicker/{}@depth20@100ms",
+        symbol.to_lowercase(),
         symbol.to_lowercase()
     ).into_client_request()?;
 
-    // Connect to the Book Ticker WebSocket
-    let (book_ticker_ws_stream, _) = connect_async(book_ticker_url).await?;
+    // Connect to Binance WebSocket
+    let (ws_stream, _) = connect_async(ws_url).await?;
+    let (_, mut read) = ws_stream.split();
 
-    let (_, mut book_ticker_read) = book_ticker_ws_stream.split(); // Split into write and read
-    // let read_future = book_ticker_read.for_each(|message| async {
-    //     println!("receiving...");
-    //      let data = message.unwrap().into_data();
-    //      tokio::io::stdout().write(&data).await.unwrap();
-    //      println!("received...");
-    // });
-    
-    // read_future.await;
+    println!("Connected to Binance stream for symbol: {}", symbol);
 
-    // Connect to the Depth WebSocket
-    let (depth_ws_stream, _) = connect_async(depth_url).await?;
-    let (_, mut depth_read) = depth_ws_stream.split(); // Split into write and read
-
-    println!(
-        "Connected to Binance WebSocket streams for symbol: {}",
-        symbol
-    );
-
-    // Clone the `tx` sender for the book ticker task
-    let tx_clone_for_book_ticker = tx.clone();
-    tokio::spawn(async move {
-        while let Some(msg) = book_ticker_read.next().await {
-            // Reading from `SplitStream`
-            match msg {
-                Ok(Message::Text(text)) => {
-                    if let Ok(book_ticker) = serde_json::from_str::<BookTickerUpdate>(&text) {
-                        tx_clone_for_book_ticker
-                            .unbounded_send(BinanceMessage::BookTicker(book_ticker))
-                            .expect("Failed to send Book Ticker message");
-                    }
+    // Read messages from the WebSocket
+    while let Some(msg) = read.next().await {
+        match msg {
+            Ok(Message::Text(text)) => {
+                // Try to deserialize the JSON message as either BookTickerUpdate or DepthUpdate
+                if let Ok(book_ticker) = serde_json::from_str::<BookTickerUpdate>(&text) {
+                    tx.unbounded_send(BinanceMessage::BookTicker(book_ticker))?;
+                } else if let Ok(depth_update) = serde_json::from_str::<DepthUpdate>(&text) {
+                    tx.unbounded_send(BinanceMessage::DepthUpdate(depth_update))?;
                 }
-                _ => {}
             }
-        }
-    });
-
-    // Clone the `tx` sender for the depth task
-    let tx_clone_for_depth = tx.clone();
-    tokio::spawn(async move {
-        while let Some(msg) = depth_read.next().await {
-            // Reading from `SplitStream`
-            match msg {
-                Ok(Message::Text(text)) => {
-                    if let Ok(depth_update) = serde_json::from_str::<DepthUpdate>(&text) {
-                        tx_clone_for_depth
-                            .unbounded_send(BinanceMessage::DepthUpdate(depth_update))
-                            .expect("Failed to send Depth message");
-                    }
-                }
-                _ => {}
+            Ok(Message::Close(_)) => {
+                println!("WebSocket connection closed.");
+                break;
             }
+            Err(e) => {
+                eprintln!("Error receiving WebSocket message: {}", e);
+                break;
+            }
+            _ => {}
         }
-    });
+    }
 
     Ok(())
 }
