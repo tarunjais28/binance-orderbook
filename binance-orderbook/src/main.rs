@@ -59,7 +59,7 @@ async fn main() -> Result<(), OrderBookError> {
     tokio::spawn(async move {
         // Call the WebSocket client for Binance. If there's an error, it gets logged.
         if let Err(e) = binance_websocket_client(&symbol, tx).await {
-            eprintln!("Error in WebSocket client: {}", e); // Log the error
+            eprintln!("{}", e.to_string().red()); // Log the error
         }
     });
 

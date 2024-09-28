@@ -23,6 +23,9 @@ pub enum OrderBookError {
 
     // Error when sending a message over the channel fails
     SendError(TrySendError<BinanceMessage>),
+
+    // Error when json data is incorrect
+    IncorrectJsonData,
 }
 
 /// Implement the `Display` trait for the `OrderBookError` enum
@@ -50,6 +53,9 @@ impl fmt::Display for OrderBookError {
 
             // Error when a message can't be sent over a channel
             OrderBookError::SendError(e) => write!(f, "Send error: {}", e),
+
+            // Error when a json data is incorrect
+            OrderBookError::IncorrectJsonData => write!(f, "Json data is incorrect!"),
         }
     }
 }

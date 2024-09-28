@@ -5,16 +5,22 @@ use super::*;
 async fn display_menu() {
     // Display the menu header
     println!("{}", "\n------- Orderbook Menu -------".green().bold());
+
     // Display the option to view the best bid/ask
     println!("{}", "1. View Best Bid/Ask".green());
+
     // Display the option to get the volume at a specific price
     println!("{}", "2. Get Volume at Price".green());
+
     // Display the option to start JSON processing
     println!("{}", "3. Start Json Processing".green());
+
     // Display the option to start WebSocket processing
     println!("{}", "4. Start WebSocket Processing".green());
+
     // Display the option to exit the program
     println!("{}", "5. Exit".green());
+
     // Display the footer
     println!("{}", "------------------------------".green().bold());
 }
@@ -105,19 +111,21 @@ pub async fn menu_interface(
                 if let Ok(update) = serde_json::from_str::<BookTickerUpdateReader>(&json_input) {
                     // Ensure the symbol in the update matches the orderbook's symbol
                     if let Err(err) = orderbook.is_symbol_same(&update.symbol) {
-                        eprintln!("{}", err);
+                        eprintln!("{}", err.to_string().red());
                         continue;
                     }
+
                     // Ensure the update is sequential based on `lastUpdateId`
                     if let Err(err) = orderbook.is_update_sequential(update.last_update_id) {
-                        eprintln!("{}", err);
+                        eprintln!("{}", err.to_string().red());
                         continue;
                     };
+
                     // Update the orderbook with the new book ticker data
                     let book_ticker_update = match BookTickerUpdate::from_reader(update) {
                         Ok(u) => u,
                         Err(err) => {
-                            eprintln!("{}", err);
+                            eprintln!("{}", err.to_string().red());
                             continue;
                         }
                     };
@@ -130,9 +138,10 @@ pub async fn menu_interface(
                 else if let Ok(update) = serde_json::from_str::<DepthUpdateReader>(&json_input) {
                     // Ensure the update is sequential based on `lastUpdateId`
                     if let Err(err) = orderbook.is_update_sequential(update.last_update_id) {
-                        eprintln!("{}", err);
+                        eprintln!("{}", err.to_string().red());
                         continue;
                     };
+
                     // Update the orderbook with the new depth data
                     let depth_update = DepthUpdate::from_reader(update);
                     orderbook.update_depth(&depth_update);
@@ -141,7 +150,7 @@ pub async fn menu_interface(
                     display_best_bid_ask(&orderbook, |orderbook| orderbook.get_best_bid_ask());
                 } else {
                     // If the input is invalid, print an error message
-                    eprintln!("Invalid json data!");
+                    eprintln!("{}", OrderBookError::IncorrectJsonData.to_string().red());
                 };
             }
             // If the `WebSocketProcessing` command is selected, start processing WebSocket messages
@@ -153,7 +162,7 @@ pub async fn menu_interface(
                 tokio::spawn(async move {
                     if let Err(e) = process_binance_messages(&orderbook_clone, &rx_clone).await {
                         // If an error occurs, print it
-                        eprintln!("Error in processing request: {}", e);
+                        eprintln!("{}", e.to_string().red());
                     }
                 });
             }

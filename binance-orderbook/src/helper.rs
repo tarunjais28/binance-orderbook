@@ -16,7 +16,7 @@ where
         "Orderbook is empty.".to_string()
     };
 
-    // Print the message with a purple color using the `.purple()` styling method
+    // Print the message
     println!("{}", msg.purple())
 }
 

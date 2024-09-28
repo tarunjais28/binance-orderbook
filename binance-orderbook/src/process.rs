@@ -8,7 +8,7 @@ pub async fn binance_websocket_client(
     // WebSocket URL for both book ticker and depth stream for the given symbol
     let ws_url = format!(
         "wss://stream.binance.com:9443/ws/{}@bookTicker/{}@depth20@100ms",
-        symbol.to_lowercase(), // Convert symbol to lowercase for the URL
+        symbol.to_lowercase(),
         symbol.to_lowercase()
     )
     .into_client_request()?; // Convert the formatted URL string into a client request
@@ -51,7 +51,7 @@ pub async fn binance_websocket_client(
             // Handle any error that occurs while receiving a WebSocket message
             Err(e) => {
                 // Print an error message
-                eprintln!("Error receiving WebSocket message: {}", e);
+                eprintln!("{}", OrderBookError::ConnectionError(e).to_string().red());
                 break;
             }
             // Ignore other types of messages (e.g., binary)
